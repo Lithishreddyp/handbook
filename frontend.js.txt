@@ -1,0 +1,107 @@
+// frontend/src/components/Comments.jsx
+import React, { useEffect, useState } from "react";
+import axios from "axios";
+
+export default function Comments({ taskId }) {
+  const [comments, setComments] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [form, setForm] = useState({ author: "", body: "" });
+  const [editingId, setEditingId] = useState(null);
+  const [error, setError] = useState(null);
+
+  const base = `/api/tasks/${taskId}/comments`;
+
+  useEffect(() => {
+    fetchComments();
+  }, [taskId]);
+
+  const fetchComments = async () => {
+    setLoading(true);
+    try {
+      const res = await axios.get(base);
+      setComments(res.data);
+    } catch (err) {
+      setError("Failed to load comments");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setError(null);
+    if (!form.body || !form.body.trim()) {
+      setError("Comment body required");
+      return;
+    }
+    try {
+      if (editingId) {
+        const res = await axios.put(`${base}/${editingId}`, { body: form.body, author: form.author });
+        setComments((prev) => prev.map((c) => (c.id === editingId ? res.data : c)));
+        setEditingId(null);
+      } else {
+        const res = await axios.post(base, form);
+        setComments((prev) => [...prev, res.data]);
+      }
+      setForm({ author: "", body: "" });
+    } catch (err) {
+      setError("Failed to save comment");
+    }
+  };
+
+  const startEdit = (c) => {
+    setEditingId(c.id);
+    setForm({ author: c.author || "", body: c.body });
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setForm({ author: "", body: "" });
+  };
+
+  const remove = async (id) => {
+    if (!window.confirm("Delete comment?")) return;
+    try {
+      await axios.delete(`${base}/${id}`);
+      setComments((prev) => prev.filter((c) => c.id !== id));
+    } catch {
+      setError("Failed to delete");
+    }
+  };
+
+  return (
+    <div className="comments">
+      <h3>Comments</h3>
+      {loading ? <div>Loading...</div> : null}
+      {error ? <div style={{ color: "red" }}>{error}</div> : null}
+
+      <ul>
+        {comments.map((c) => (
+          <li key={c.id}>
+            <strong>{c.author || "Anonymous"}</strong>: {c.body}
+            <div style={{ fontSize: 12 }}>
+              <button onClick={() => startEdit(c)}>Edit</button>
+              <button onClick={() => remove(c.id)}>Delete</button>
+            </div>
+          </li>
+        ))}
+      </ul>
+
+      <form onSubmit={submit}>
+        <input
+          placeholder="Your name (optional)"
+          value={form.author}
+          onChange={(e) => setForm({ ...form, author: e.target.value })}
+        />
+        <textarea
+          placeholder="Write a comment..."
+          value={form.body}
+          onChange={(e) => setForm({ ...form, body: e.target.value })}
+          required
+        />
+        <button type="submit">{editingId ? "Save" : "Add comment"}</button>
+        {editingId && <button type="button" onClick={cancelEdit}>Cancel</button>}
+      </form>
+    </div>
+  );
+}
